@@ -1,5 +1,6 @@
 import discord
-import os
+from discord.ext import commands
+from character import Character
 import requests
 import json
 import time
@@ -7,30 +8,34 @@ import datetime
 import logging
 import keys
 
-client = discord.Client()
-logger = logging.getLogger('Discord')
-logger.setLevel(logging.DEBUG)
-handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
-handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
-logger.addHandler(handler)
 token = keys.token
 retail_v1_base_url = 'https://www.warcraftlogs.com:443/v1/'
 ffl_v1_base_url = 'https://www.fflogs.com:443/v1/'
 base_report_url = 'https://www.warcraftlogs.com/reports/'
 default_error_message = 'Something went wrong, check arguments and try again or contact Grumpo.'
 
+logger = logging.getLogger('Discord')
+logger.setLevel(logging.DEBUG)
+handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
+handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
+logger.addHandler(handler)
+
+chars = {}
+
+client = commands.Bot(command_prefix = '!')
+
+
 
 def get_character_parse_for_zone_id(game, characterName, server, region, zoneId):
+    print(game)
     if game == "ff" :
         response = requests.get(
-            ffl_v1_base_url +
+            ffl_v1_base_url + 
             characterName + '/' + server + '/' + region + '/' + '?zone=' + zoneId +
             '&api_key=' + keys.ffl_v1_key)
     elif game == "retail" :
-        response = requests.get(
-            retail_v1_base_url +
-            characterName + '/' + server + '/' + region + '/' + '?zone=' + zoneId +
-            '&api_key=' + keys.retail_v1_key)
+        requestUrl = retail_v1_base_url + 'parses/character/' +characterName + '/' + server + '/' + region + '/' + '?zone=' + zoneId +'&api_key=' + keys.retail_v1_key
+        response = requests.get(requestUrl)
     json_data = json.loads(response.text)
     return json_data
 
@@ -54,9 +59,22 @@ def get_reports_for_guild_by_date(guildName, server, region, startDate):
         '&api_key=' + keys.wcl_v1_key)
     return json.loads(response.text)
 
-@client.event
-async def on_error(arg):
+def add_character(user, name, server, region):
+    chars[user] = Character(name, server, region)
+    print(chars)
     pass
+
+@client.command()
+async def addCharacter(ctx, name, server, region):
+    logger.info("Adding character")
+    add_character(ctx.author, name, server, region)
+    pass
+
+@client.command()
+async def whisper(ctx):
+    print("attempting to whisper")
+    member = ctx.author
+    await member.send("whisper")
 
 @client.event
 async def on_ready():
@@ -65,6 +83,7 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    await client.process_commands(message)
     if message.author == client.user:
         return
 
@@ -141,7 +160,6 @@ async def on_message(message):
             print('Error in Most Recent Parse for Character!\n' + str(e) +
                   '\n')
             await message.channel.send(default_error_message)
-
 
 #keep_alive()
 client.run(token)
